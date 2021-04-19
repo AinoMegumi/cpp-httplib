@@ -686,9 +686,9 @@ public:
 
   bool bind_to_port(const char *host, int port, int socket_flags = 0);
   int bind_to_any_port(const char *host, int socket_flags = 0);
-  bool listen_after_bind();
+  bool listen_after_bind(const std::function<void()>& background_process = nullptr);
 
-  bool listen(const char *host, int port, int socket_flags = 0);
+  bool listen(const char *host, int port, int socket_flags = 0, const std::function<void()>& background_process = nullptr);
 
   bool is_running() const;
   void stop();
@@ -719,7 +719,7 @@ private:
   socket_t create_server_socket(const char *host, int port, int socket_flags,
                                 SocketOptions socket_options) const;
   int bind_internal(const char *host, int port, int socket_flags);
-  bool listen_internal();
+  bool listen_internal(const std::function<void()>& background_process = nullptr);
 
   bool routing(Request &req, Response &res, Stream &strm);
   bool handle_file_request(const Request &req, Response &res,
@@ -4467,10 +4467,10 @@ inline int Server::bind_to_any_port(const char *host, int socket_flags) {
   return bind_internal(host, 0, socket_flags);
 }
 
-inline bool Server::listen_after_bind() { return listen_internal(); }
+inline bool Server::listen_after_bind(const std::function<void()>& background_process) { return listen_internal(background_process); }
 
-inline bool Server::listen(const char *host, int port, int socket_flags) {
-  return bind_to_port(host, port, socket_flags) && listen_internal();
+inline bool Server::listen(const char *host, int port, int socket_flags, const std::function<void()>& background_process) {
+  return bind_to_port(host, port, socket_flags) && listen_internal(background_process);
 }
 
 inline bool Server::is_running() const { return is_running_; }
@@ -4809,7 +4809,7 @@ inline int Server::bind_internal(const char *host, int port, int socket_flags) {
   }
 }
 
-inline bool Server::listen_internal() {
+inline bool Server::listen_internal(const std::function<void()>& background_process) {
   auto ret = true;
   is_running_ = true;
 
@@ -4817,6 +4817,7 @@ inline bool Server::listen_internal() {
     std::unique_ptr<TaskQueue> task_queue(new_task_queue());
 
     while (svr_sock_ != INVALID_SOCKET) {
+      if (background_process != nullptr) background_process();
 #ifndef _WIN32
       if (idle_interval_sec_ > 0 || idle_interval_usec_ > 0) {
 #endif
